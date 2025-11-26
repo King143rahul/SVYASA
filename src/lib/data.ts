@@ -31,10 +31,13 @@ const generateAvatar = (seed: string) => {
 const API_BASE = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '/.netlify/functions/api';
 
 const apiCall = async (endpoint: string, options?: RequestInit) => {
-  const response = await fetch(`${API_BASE}/api${endpoint}`, {
+  const url = `${API_BASE}/api${endpoint}`;
+  console.log('API call to:', url, options?.method || 'GET');
+  const response = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
+  console.log('Response status:', response.status);
   if (!response.ok) {
     throw new Error(`API call failed: ${response.statusText}`);
   }
