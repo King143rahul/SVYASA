@@ -28,7 +28,7 @@ const generateAvatar = (seed: string) => {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
 };
 
-const API_BASE = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001';
+const API_BASE = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '/.netlify/functions/api';
 
 const apiCall = async (endpoint: string, options?: RequestInit) => {
   const response = await fetch(`${API_BASE}/api${endpoint}`, {
@@ -107,5 +107,45 @@ export const addComment = async (postId: string, comment: Omit<Comment, 'postId'
     });
   } catch (error) {
     console.error('Error adding comment:', error);
+  }
+};
+
+// Notes functions
+interface Note {
+  id?: string;
+  text: string;
+  timestamp: Date;
+}
+
+export const getNotes = async (): Promise<Note[]> => {
+  try {
+    const notes = await apiCall('/notes');
+    return notes.map((note: any) => ({
+      ...note,
+      timestamp: new Date(note.timestamp),
+    })).sort((a: Note, b: Note) => b.timestamp.getTime() - a.timestamp.getTime());
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    return [];
+  }
+};
+
+export const addNote = async (note: Omit<Note, 'id'>) => {
+  try {
+    const noteData = { ...note, id: Date.now().toString() };
+    await apiCall('/notes', {
+      method: 'POST',
+      body: JSON.stringify(noteData),
+    });
+  } catch (error) {
+    console.error('Error adding note:', error);
+  }
+};
+
+export const deleteNote = async (id: string) => {
+  try {
+    await apiCall(`/notes/${id}`, { method: 'DELETE' });
+  } catch (error) {
+    console.error('Error deleting note:', error);
   }
 };

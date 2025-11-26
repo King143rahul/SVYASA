@@ -8,7 +8,7 @@ import TrendingSidebar from "@/components/TrendingSidebar";
 import TrendingModal from "@/components/TrendingModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getPosts, getComments, addPost as addPosToData, addComment as addCommToData } from "@/lib/data";
+import { getPosts, getComments, addPost as addPosToData, addComment as addCommToData, getNotes } from "@/lib/data";
 
 interface Post {
   id: string;
@@ -52,7 +52,7 @@ const Index = () => {
   const [isTrendingModalOpen, setIsTrendingModalOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
-  const [adminNotes, setAdminNotes] = useState(() => JSON.parse(localStorage.getItem('adminNotes') || '[]'));
+  const [adminNotes, setAdminNotes] = useState<any[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -60,6 +60,8 @@ const Index = () => {
       setPosts(fetchedPosts);
       const fetchedComments = await getComments();
       setComments(fetchedComments);
+      const fetchedNotes = await getNotes();
+      setAdminNotes(fetchedNotes);
     };
     loadData();
   }, []);

@@ -7,18 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import Header from "@/components/Header";
-import { getPosts, deletePost } from "@/lib/data";
+import { getPosts, deletePost, getNotes, addNote, deleteNote } from "@/lib/data";
 
 const Admin = () => {
   const [password, setPassword] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
-  const [notes, setNotes] = useState(() => JSON.parse(localStorage.getItem('adminNotes') || '[]'));
+  const [notes, setNotes] = useState<any[]>([]);
   const [newNote, setNewNote] = useState("");
 
   useEffect(() => {
     if (isAuthenticated) {
       getPosts().then(setPosts);
+      getNotes().then(setNotes);
     }
   }, [isAuthenticated]);
 
@@ -40,19 +41,19 @@ const Admin = () => {
     }
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (newNote.trim()) {
-      const updatedNotes = [...notes, { id: Date.now(), text: newNote.trim(), timestamp: new Date() }];
+      await addNote({ text: newNote.trim(), timestamp: new Date() });
+      const updatedNotes = await getNotes();
       setNotes(updatedNotes);
-      localStorage.setItem('adminNotes', JSON.stringify(updatedNotes));
       setNewNote("");
     }
   };
 
-  const handleDeleteNote = (id: number) => {
-    const updatedNotes = notes.filter(note => note.id !== id);
+  const handleDeleteNote = async (id: string) => {
+    await deleteNote(id);
+    const updatedNotes = await getNotes();
     setNotes(updatedNotes);
-    localStorage.setItem('adminNotes', JSON.stringify(updatedNotes));
   };
 
   if (!isAuthenticated) {

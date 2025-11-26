@@ -21,6 +21,8 @@ const getDatabase = () => {
   return client.db('sv-secrets');
 };
 
+const NOTES_COLLECTION = 'notes';
+
 // Mock data for seeding
 const mockPosts = [
   {
@@ -121,6 +123,7 @@ export async function handler(event, context) {
     const db = getDatabase();
     const postsCollection = db.collection('posts');
     const commentsCollection = db.collection('comments');
+    const notesCollection = db.collection(NOTES_COLLECTION);
 
     let result;
     let statusCode = 200;
@@ -183,6 +186,20 @@ export async function handler(event, context) {
       );
 
       result = insertResult;
+    } else if (httpMethod === 'GET' && segments[0] === 'notes') {
+      // GET /notes
+      const notes = await notesCollection.find({}).sort({ timestamp: -1 }).toArray();
+      result = notes;
+    } else if (httpMethod === 'POST' && segments[0] === 'notes') {
+      // POST /notes
+      const note = JSON.parse(body);
+      const insertResult = await notesCollection.insertOne(note);
+      result = insertResult;
+    } else if (httpMethod === 'DELETE' && segments[0] === 'notes' && segments[1]) {
+      // DELETE /notes/:id
+      const id = segments[1];
+      const deleteResult = await notesCollection.deleteOne({ id });
+      result = deleteResult;
     } else {
       statusCode = 404;
       result = { error: 'Not found' };
