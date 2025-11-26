@@ -201,11 +201,12 @@ export async function handler(event, context) {
     console.error('Error:', error);
     return {
       statusCode: 500,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-      },
+      headers: corsHeaders,
       body: JSON.stringify({ error: 'Internal server error' }),
     };
-        ...corsHeaders,
-        'Content-Type': 'application/json',
+  } finally {
+    if (client) {
+      await client.close();
+    }
+  }
+}
