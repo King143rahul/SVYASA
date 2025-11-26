@@ -13,7 +13,7 @@
 [build.environment]
   NODE_VERSION = "20"
   # This flag prevents the build from failing due to peer dependency conflicts
-  NPM_FLAGS = "--legacy-peer-deps"
+  NPM_FLAGS = "--legacy-peer-deps --include=dev"
 
 # Redirect API requests to your MongoDB function
 [[redirects]]
