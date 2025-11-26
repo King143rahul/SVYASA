@@ -1,21 +1,27 @@
 [build]
+  # Directory that holds the built app
   publish = "dist"
+  # Command to build your app
   command = "npm run build"
+  # Directory where your functions live
   functions = "netlify/functions"
 
 [functions]
+  # Use esbuild to bundle your functions (including the mongodb driver)
   node_bundler = "esbuild"
 
 [build.environment]
   NODE_VERSION = "20"
+  # This flag prevents the build from failing due to peer dependency conflicts
+  NPM_FLAGS = "--legacy-peer-deps"
 
-# 1. Redirect API calls to the Netlify Function
+# Redirect API requests to your MongoDB function
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api"
   status = 200
 
-# 2. Redirect everything else to index.html for React Router
+# Redirect all other routes to index.html (for React Router)
 [[redirects]]
   from = "/*"
   to = "/index.html"
