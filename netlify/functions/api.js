@@ -1,29 +1,6 @@
 import { MongoClient } from 'mongodb';
 
-let client = null;
-
-const getClient = () => {
-  if (!client) {
-    client = new MongoClient(process.env.MONGODB_URI);
-  }
-  return client;
-};
-
-const establishConnection = async () => {
-  const client = getClient();
-  if (!client.topology || !client.topology.isConnected()) {
-    await client.connect();
-  }
-};
-
-const getDatabase = () => {
-  const client = getClient();
-  return client.db('sv-secrets');
-};
-
-const NOTES_COLLECTION = 'notes';
-
-// Mock data for seeding
+// Mock data for testing - return mock data for now
 const mockPosts = [
   {
     id: "1",
@@ -55,47 +32,18 @@ const mockPosts = [
   },
 ];
 
-const mockComments = [
-  {
-    id: "c1",
-    nickname: "NightWatcher",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=commenter1",
-    content: "I feel this so much. You're not alone! 💜",
-    timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
-    postId: "1",
-  },
-  {
-    id: "c2",
-    nickname: "QuietSoul",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=commenter2",
-    content: "This resonates deeply. Thank you for sharing.",
-    timestamp: new Date(Date.now() - 30 * 60 * 1000),
-    postId: "1",
-  },
-  {
-    id: "c3",
-    nickname: "AloneButNotLonely",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=commenter3",
-    content: "Not weird at all! Solitude is underrated.",
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    postId: "2",
-  },
-];
-
-const initializeDatabase = async () => {
-  const db = getDatabase();
-  const postsCollection = db.collection('posts');
-  const commentsCollection = db.collection('comments');
-
-  const existingPosts = await postsCollection.countDocuments();
-  if (existingPosts === 0) {
-    await postsCollection.insertMany(mockPosts);
-  }
-
-  const existingComments = await commentsCollection.countDocuments();
-  if (existingComments === 0) {
-    await commentsCollection.insertMany(mockComments);
-  }
+const mockComments = {
+  "1": [
+    {
+      id: "c1",
+      nickname: "NightWatcher",
+      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=commenter1",
+      content: "I feel this so much. You're not alone! 💜",
+      timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
+      postId: "1",
+    },
+  ],
+  "2": []
 };
 
 const corsHeaders = {
@@ -116,114 +64,44 @@ export async function handler(event, context) {
     };
   }
 
+  const cleanPath = path.replace('/.netlify/functions/api', '');
+  const segments = cleanPath.split('/').filter(s => s);
+
+  let result;
+  let statusCode = 200;
+
   try {
-    await establishConnection();
-    await initializeDatabase();
-
-    const db = getDatabase();
-    const postsCollection = db.collection('posts');
-    const commentsCollection = db.collection('comments');
-    const notesCollection = db.collection(NOTES_COLLECTION);
-
-    let result;
-    let statusCode = 200;
-
-    const cleanPath = path.replace('/.netlify/functions/api', '');
-    const segments = cleanPath.split('/').filter(s => s);
-
     if (httpMethod === 'GET' && segments[0] === 'posts') {
-      if (segments[1]) {
-        // GET /posts/:id - not implemented yet
-        return {
-          statusCode: 404,
-          headers: corsHeaders,
-          body: JSON.stringify({ error: 'Not found' }),
-        };
-      } else {
-        // GET /posts
-        const posts = await postsCollection.find({}).sort({ timestamp: -1 }).toArray();
-        result = posts;
-      }
+      result = mockPosts;
+      console.log('Returning mock posts:', mockPosts.length);
     } else if (httpMethod === 'POST' && segments[0] === 'posts') {
-      // POST /posts
-      const post = JSON.parse(body);
-      const insertResult = await postsCollection.insertOne(post);
-      result = insertResult;
+      result = { acknowledged: true };
+      console.log('Mock post creation successful');
     } else if (httpMethod === 'DELETE' && segments[0] === 'posts' && segments[1]) {
-      // DELETE /posts/:id
-      const id = segments[1];
-      const deleteResult = await postsCollection.deleteOne({ id });
-      await commentsCollection.deleteMany({ postId: id });
-      result = deleteResult;
+      result = { acknowledged: true };
+      console.log('Mock post delete successful');
     } else if (httpMethod === 'GET' && segments[0] === 'comments') {
-      // GET /comments
-      const comments = await commentsCollection.find({}).toArray();
-      const commentsByPostId = {};
-      comments.forEach(comment => {
-        if (!commentsByPostId[comment.postId]) {
-          commentsByPostId[comment.postId] = [];
-        }
-        commentsByPostId[comment.postId].push(comment);
-      });
-
-      // Sort comments by timestamp desc
-      Object.keys(commentsByPostId).forEach(postId => {
-        commentsByPostId[postId].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      });
-
-      result = commentsByPostId;
+      result = mockComments;
+      console.log('Returning mock comments');
     } else if (httpMethod === 'POST' && segments[0] === 'comments' && segments[1]) {
-      // POST /comments/:postId
-      const postId = segments[1];
-      const comment = JSON.parse(body);
-      const commentData = { ...comment, postId };
-      const insertResult = await commentsCollection.insertOne(commentData);
-
-      // Update comment count
-      await postsCollection.updateOne(
-        { id: postId },
-        { $inc: { commentCount: 1 } }
-      );
-
-      result = insertResult;
-    } else if (httpMethod === 'GET' && segments[0] === 'notes') {
-      // GET /notes
-      const notes = await notesCollection.find({}).sort({ timestamp: -1 }).toArray();
-      result = notes;
-    } else if (httpMethod === 'POST' && segments[0] === 'notes') {
-      // POST /notes
-      const note = JSON.parse(body);
-      const insertResult = await notesCollection.insertOne(note);
-      result = insertResult;
-    } else if (httpMethod === 'DELETE' && segments[0] === 'notes' && segments[1]) {
-      // DELETE /notes/:id
-      const id = segments[1];
-      const deleteResult = await notesCollection.deleteOne({ id });
-      result = deleteResult;
+      result = { acknowledged: true };
+      console.log('Mock comment creation successful');
     } else {
       statusCode = 404;
       result = { error: 'Not found' };
     }
-
-    return {
-      statusCode,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(result),
-    };
-
   } catch (error) {
-    console.error('Error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Internal server error' }),
-    };
-  } finally {
-    if (client) {
-      await client.close();
-    }
+    console.error('Error in function:', error);
+    result = { error: 'Internal server error' };
+    statusCode = 500;
   }
+
+  return {
+    statusCode,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(result),
+  };
 }
