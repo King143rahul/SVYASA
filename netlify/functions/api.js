@@ -1,57 +1,3 @@
-import { MongoClient } from 'mongodb';
-
-// Mock data for testing - return mock data for now
-const mockPosts = [
-  {
-    id: "1",
-    nickname: "MidnightDreamer",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user1",
-    content: "Sometimes I feel like I'm living two lives - the one everyone sees and the one only I know about. #confession #innerworld #thoughts",
-    hashtags: ["#confession", "#innerworld", "#thoughts"],
-    department: "computer-science",
-    year: "3rd",
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    expiresIn: "22h left",
-    commentCount: 2,
-    ip: "192.168.1.100",
-    deviceInfo: "Chrome on Windows 11",
-  },
-  {
-    id: "2",
-    nickname: "SilentObserver",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=user2",
-    content: "I've been scared to tell anyone, but I'm happier alone than in crowds. Is that weird? #introvert #truth #authentic",
-    hashtags: ["#introvert", "#truth", "#authentic"],
-    department: "information-technology",
-    year: "2nd",
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    expiresIn: "19h left",
-    commentCount: 1,
-    ip: "192.168.1.101",
-    deviceInfo: "Firefox on macOS",
-  },
-];
-
-const mockComments = {
-  "1": [
-    {
-      id: "c1",
-      nickname: "NightWatcher",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=commenter1",
-      content: "I feel this so much. You're not alone! 💜",
-      timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
-      postId: "1",
-    },
-  ],
-  "2": []
-};
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-};
-
 export async function handler(event, context) {
   const { httpMethod, path, body } = event;
 
@@ -59,49 +5,115 @@ export async function handler(event, context) {
   if (httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      },
       body: '',
     };
   }
 
-  const cleanPath = path.replace('/.netlify/functions/api', '');
-  const segments = cleanPath.split('/').filter(s => s);
-
-  let result;
-  let statusCode = 200;
-
   try {
-    if (httpMethod === 'GET' && segments[0] === 'posts') {
-      result = mockPosts;
-      console.log('Returning mock posts:', mockPosts.length);
-    } else if (httpMethod === 'POST' && segments[0] === 'posts') {
-      result = { acknowledged: true };
-      console.log('Mock post creation successful');
-    } else if (httpMethod === 'DELETE' && segments[0] === 'posts' && segments[1]) {
-      result = { acknowledged: true };
-      console.log('Mock post delete successful');
-    } else if (httpMethod === 'GET' && segments[0] === 'comments') {
-      result = mockComments;
-      console.log('Returning mock comments');
-    } else if (httpMethod === 'POST' && segments[0] === 'comments' && segments[1]) {
-      result = { acknowledged: true };
-      console.log('Mock comment creation successful');
+    // Re-use connection if possible
+    await establishConnection();
+    await initializeDatabase();
+
+    const db = getDatabase();
+    const postsCollection = db.collection('posts');
+    const commentsCollection = db.collection('comments');
+
+    let result;
+    let statusCode = 200;
+
+    // FIX: Clean path handling
+    // Remove the API prefix from the request path
+    let cleanPath = path;
+    if (cleanPath.startsWith('/.netlify/functions/api/')) {
+      cleanPath = cleanPath.slice('/.netlify/functions/api'.length);
+    } else if (cleanPath.startsWith('/api/')) {
+      cleanPath = cleanPath.slice('/api'.length);
+    }
+
+    // Example: "/posts" -> ["posts"]
+    // Example: "/posts/123" -> ["posts", "123"]
+    const segments = cleanPath.split('/').filter(Boolean);
+
+    const resource = segments[0]; // 'posts' or 'comments'
+    const id = segments[1];       // id if present
+
+    if (httpMethod === 'GET' && resource === 'posts') {
+      const posts = await postsCollection.find({}).sort({ timestamp: -1 }).toArray();
+      result = posts;
+    } else if (httpMethod === 'POST' && resource === 'posts') {
+      const post = JSON.parse(body);
+      if (post.timestamp) post.timestamp = new Date(post.timestamp);
+      const insertResult = await postsCollection.insertOne(post);
+      result = insertResult;
+    } else if (httpMethod === 'DELETE' && resource === 'posts' && id) {
+      const deleteResult = await postsCollection.deleteOne({ id });
+      await commentsCollection.deleteMany({ postId: id });
+      result = deleteResult;
+    } else if (httpMethod === 'GET' && resource === 'comments') {
+      const comments = await commentsCollection.find({}).toArray();
+      const commentsByPostId = {};
+      comments.forEach(comment => {
+        if (!commentsByPostId[comment.postId]) {
+          commentsByPostId[comment.postId] = [];
+        }
+        commentsByPostId[comment.postId].push(comment);
+      });
+      Object.keys(commentsByPostId).forEach(postId => {
+        commentsByPostId[postId].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      });
+      result = commentsByPostId;
+    } else if (httpMethod === 'POST' && resource === 'comments' && id) {
+      const postId = id;
+      const comment = JSON.parse(body);
+      if (comment.timestamp) comment.timestamp = new Date(comment.timestamp);
+      const commentData = { ...comment, postId };
+      const insertResult = await commentsCollection.insertOne(commentData);
+      await postsCollection.updateOne({ id: postId }, { $inc: { commentCount: 1 } });
+      result = insertResult;
+    } else if (httpMethod === 'GET' && resource === 'notes') {
+      const notesCollection = db.collection('notes');
+      const notes = await notesCollection.find({}).sort({ timestamp: -1 }).toArray();
+      result = notes;
+    } else if (httpMethod === 'POST' && resource === 'notes') {
+      const notesCollection = db.collection('notes');
+      const note = JSON.parse(body);
+      if (note.timestamp) note.timestamp = new Date(note.timestamp);
+      const insertResult = await notesCollection.insertOne(note);
+      result = insertResult;
+    } else if (httpMethod === 'DELETE' && resource === 'notes' && id) {
+      const notesCollection = db.collection('notes');
+      const deleteResult = await notesCollection.deleteOne({ id });
+      result = deleteResult;
     } else {
       statusCode = 404;
       result = { error: 'Not found' };
     }
-  } catch (error) {
-    console.error('Error in function:', error);
-    result = { error: 'Internal server error' };
-    statusCode = 500;
-  }
 
-  return {
-    statusCode,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(result),
-  };
+    return {
+      statusCode,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      },
+      body: JSON.stringify(result),
+    };
+
+  } catch (error) {
+    console.error('Error:', error);
+    return {
+      statusCode: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      },
+      body: JSON.stringify({ error: 'Internal server error', details: error.message }),
+    };
+  }
 }
