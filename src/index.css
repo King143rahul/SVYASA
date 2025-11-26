@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Light Mode - Soft Pastel Theme */
+    --background: 280 30% 98%;
+    --foreground: 280 20% 20%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 280 20% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 280 20% 20%;
+
+    --primary: 280 80% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 330 70% 85%;
+    --secondary-foreground: 330 80% 30%;
+
+    --muted: 280 20% 95%;
+    --muted-foreground: 280 10% 50%;
+
+    --accent: 200 80% 70%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 280 20% 90%;
+    --input: 280 20% 95%;
+    --ring: 280 80% 60%;
+
+    --radius: 1rem;
+
+    /* Custom gradient colors */
+    --gradient-purple: 280 80% 60%;
+    --gradient-pink: 330 80% 65%;
+    --gradient-blue: 220 80% 70%;
+    
+    /* Glow colors */
+    --glow-primary: 280 100% 70%;
+    --glow-secondary: 330 100% 75%;
+    
+    /* Glass effect */
+    --glass-bg: 0 0% 100%;
+    --glass-border: 280 20% 90%;
+  }
+
+  .dark {
+    /* Dark Mode - Neon Glow Theme */
+    --background: 280 30% 8%;
+    --foreground: 280 10% 95%;
+
+    --card: 280 25% 12%;
+    --card-foreground: 280 10% 95%;
+
+    --popover: 280 25% 12%;
+    --popover-foreground: 280 10% 95%;
+
+    --primary: 280 80% 70%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 330 70% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 280 20% 18%;
+    --muted-foreground: 280 10% 65%;
+
+    --accent: 220 80% 65%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 280 20% 20%;
+    --input: 280 20% 18%;
+    --ring: 280 80% 70%;
+
+    /* Custom gradient colors - more vibrant in dark */
+    --gradient-purple: 280 90% 65%;
+    --gradient-pink: 330 85% 60%;
+    --gradient-blue: 220 85% 65%;
+    
+    /* Glow colors - stronger in dark */
+    --glow-primary: 280 100% 70%;
+    --glow-secondary: 330 100% 70%;
+    
+    /* Glass effect - darker with more blur */
+    --glass-bg: 280 25% 12%;
+    --glass-border: 280 30% 25%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border transition-colors duration-300;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Glassmorphism effect */
+  .glass-card {
+    @apply bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl shadow-lg;
+  }
+
+  .glass-card-hover {
+    @apply glass-card hover:bg-card/60 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 bg-clip-text text-transparent;
+  }
+
+  /* Neon glow effect */
+  .neon-glow {
+    @apply shadow-lg shadow-primary/30;
+  }
+
+  .neon-glow-hover {
+    @apply hover:shadow-xl hover:shadow-primary/40 transition-shadow duration-300;
+  }
+
+  /* Gradient backgrounds */
+  .gradient-bg-primary {
+    @apply bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500;
+  }
+
+  .gradient-bg-soft {
+    @apply bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-purple-950/30 dark:via-pink-950/30 dark:to-blue-950/30;
+  }
+
+  /* Animated gradient border */
+  .gradient-border {
+    @apply relative before:absolute before:inset-0 before:rounded-2xl before:p-[2px] before:bg-gradient-to-r before:from-purple-500 before:via-pink-500 before:to-blue-500 before:-z-10;
+  }
+
+  /* Smooth entrance animations */
+  .fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .slide-up {
+    animation: slideUp 0.5s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Hashtag styling */
+  .hashtag {
+    @apply text-primary hover:text-primary/80 font-semibold cursor-pointer transition-colors duration-200;
+  }
+}
