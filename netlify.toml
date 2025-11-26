@@ -1,14 +1,12 @@
 [build]
-  # Directory that holds the built app
   publish = "dist"
-  # Command to build your app
   command = "npm run build"
-  # Directory where your functions live
   functions = "netlify/functions"
 
 [functions]
-  # Use esbuild to bundle your functions (including the mongodb driver)
   node_bundler = "esbuild"
+  # This is CRITICAL for MongoDB driver to work in Serverless functions
+  external_node_modules = ["mongodb"]
 
 [build.environment]
   NODE_VERSION = "20"

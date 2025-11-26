@@ -28,7 +28,7 @@ const generateAvatar = (seed: string) => {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
 };
 
-const API_BASE = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '/.netlify/functions/api';
+const API_BASE = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001';
 
 const apiCall = async (endpoint: string, options?: RequestInit) => {
   const url = `${API_BASE}/api${endpoint}`;
