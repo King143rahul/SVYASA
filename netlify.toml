@@ -1,21 +1,22 @@
 [build]
-  # Directory where to build (same as Vite's default 'dist' folder)
   publish = "dist"
-
-  # Command to build the frontend
   command = "npm run build"
-
-  # Directory for functions
   functions = "netlify/functions"
 
 [functions]
-  # Node version for functions
   node_bundler = "esbuild"
 
-# Build environment variables
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "20"
 
-# Redirect function calls to handle API routes
-# This assumes functions are in netlify/functions directory
-# Functions will be available at /.netlify/functions/api
+# 1. Redirect API calls to the Netlify Function
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api"
+  status = 200
+
+# 2. Redirect everything else to index.html for React Router
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
