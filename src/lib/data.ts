@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: king143rahul/svyasa/SVYASA-76983a21efddfc86d9d8c84451e3f27affabbaca/src/lib/data.ts
-fullContent:
 interface Comment {
   id: string;
   nickname: string;
@@ -26,7 +22,7 @@ interface Post {
   commentCount: number;
   ip?: string;
   deviceInfo?: string;
-  reactions?: Record<string, number>; // Added for emoji feature
+  reactions?: Record<string, number>;
 }
 
 const generateAvatar = (seed: string) => {
@@ -69,7 +65,10 @@ export const getPosts = async (): Promise<Post[]> => {
 export const getComments = async (): Promise<Record<string, Comment[]>> => {
   try {
     const commentsMap = await apiCall('/comments');
-    // Fix: Iterate over object keys instead of using forEach on the object itself
+    
+    // Fix: Ensure we handle the object correctly
+    if (!commentsMap || typeof commentsMap !== 'object') return {};
+
     Object.keys(commentsMap).forEach((postId) => {
       commentsMap[postId] = commentsMap[postId].map((comment: any) => ({
         ...comment,
@@ -133,13 +132,12 @@ interface Note {
 
 export const getNotes = async (): Promise<Note[]> => {
   try {
-    const notes = await apiCall('/notes');
-    return notes.map((note: any) => ({
+    const notes = await apiCall('/notes').catch(() => []); 
+    return Array.isArray(notes) ? notes.map((note: any) => ({
       ...note,
       timestamp: new Date(note.timestamp),
-    })).sort((a: Note, b: Note) => b.timestamp.getTime() - a.timestamp.getTime());
+    })).sort((a: Note, b: Note) => b.timestamp.getTime() - a.timestamp.getTime()) : [];
   } catch (error) {
-    console.error('Error fetching notes:', error);
     return [];
   }
 };
@@ -163,4 +161,3 @@ export const deleteNote = async (id: string) => {
     console.error('Error deleting note:', error);
   }
 };
-}
