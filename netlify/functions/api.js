@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 
-// Cache the client outside the handler to reuse connections
+// Cache the client to reuse connections (Critical for serverless performance)
 let cachedClient = null;
 let cachedDb = null;
 
@@ -9,6 +9,7 @@ const connectToDatabase = async () => {
     return { client: cachedClient, db: cachedDb };
   }
 
+  // NOTE: Ensure 'MONGODB_URI' is set in your Netlify "Environment variables" settings
   if (!process.env.MONGODB_URI) {
     throw new Error('MONGODB_URI environment variable is MISSING in Netlify settings.');
   }
@@ -31,6 +32,7 @@ const corsHeaders = {
 };
 
 export async function handler(event, context) {
+  // 1. Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
   }
@@ -42,39 +44,57 @@ export async function handler(event, context) {
 
     const { httpMethod, path, body } = event;
 
+    // 2. Parse the path to get resource (posts/comments) and ID
+    // Path comes in as "/.netlify/functions/api/posts" or "/api/posts"
     const segments = path
       .split('/')
       .filter(s => s && s !== '.netlify' && s !== 'functions' && s !== 'api');
 
-    const resource = segments[0]; 
-    const id = segments[1];       
+    const resource = segments[0]; // 'posts' or 'comments'
+    const id = segments[1];       // '123' or undefined
+
+    console.log(`Request: ${httpMethod} /${resource}/${id || ''}`);
 
     let result;
 
+    // --- API ROUTING LOGIC ---
+
+    // GET /posts
     if (httpMethod === 'GET' && resource === 'posts') {
       result = await postsCollection.find({}).sort({ timestamp: -1 }).toArray();
     }
+    // POST /posts
     else if (httpMethod === 'POST' && resource === 'posts') {
       const post = JSON.parse(body);
       if (post.timestamp) post.timestamp = new Date(post.timestamp);
       else post.timestamp = new Date();
+      
+      // Ensure reactions object exists
+      post.reactions = post.reactions || {};
+      
       result = await postsCollection.insertOne(post);
     }
+    // PATCH /posts/:id (Reactions)
     else if (httpMethod === 'PATCH' && resource === 'posts' && id) {
       const updateData = JSON.parse(body);
+      
       if (updateData.reaction) {
-         // Atomic increment for reactions
-         const field = `reactions.${updateData.reaction}`;
-         result = await postsCollection.updateOne({ id }, { $inc: { [field]: 1 } });
+        // Atomic increment for specific reaction emoji
+        const field = `reactions.${updateData.reaction}`;
+        await postsCollection.updateOne({ id }, { $inc: { [field]: 1 } });
+        result = { success: true };
       } else {
-         result = await postsCollection.updateOne({ id }, { $set: updateData });
+        await postsCollection.updateOne({ id }, { $set: updateData });
+        result = { success: true };
       }
     }
+    // DELETE /posts/:id
     else if (httpMethod === 'DELETE' && resource === 'posts' && id) {
       await postsCollection.deleteOne({ id });
       await commentsCollection.deleteMany({ postId: id });
       result = { success: true };
     }
+    // GET /comments
     else if (httpMethod === 'GET' && resource === 'comments') {
       const comments = await commentsCollection.find({}).toArray();
       const commentsByPostId = {};
@@ -82,8 +102,13 @@ export async function handler(event, context) {
         if (!commentsByPostId[c.postId]) commentsByPostId[c.postId] = [];
         commentsByPostId[c.postId].push(c);
       });
+      // Sort comments by timestamp
+      Object.keys(commentsByPostId).forEach(pid => {
+        commentsByPostId[pid].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      });
       result = commentsByPostId;
     }
+    // POST /comments/:postId
     else if (httpMethod === 'POST' && resource === 'comments' && id) {
       const comment = JSON.parse(body);
       if (comment.timestamp) comment.timestamp = new Date(comment.timestamp);
@@ -92,13 +117,18 @@ export async function handler(event, context) {
       const commentData = { ...comment, postId: id };
       result = await commentsCollection.insertOne(commentData);
 
-      await postsCollection.updateOne({ id }, { $inc: { commentCount: 1 } });
+      // Increment comment count on the post
+      await postsCollection.updateOne(
+        { id },
+        { $inc: { commentCount: 1 } }
+      );
     }
+    // 404 Not Found
     else {
       return {
         statusCode: 404,
         headers: corsHeaders,
-        body: JSON.stringify({ error: `Route not found: ${resource}` })
+        body: JSON.stringify({ error: `Route not found: ${httpMethod} /${resource}` })
       };
     }
 
@@ -113,8 +143,7 @@ export async function handler(event, context) {
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: error.message, stack: error.stack }),
+      body: JSON.stringify({ error: error.message || 'Internal Server Error' }),
     };
   }
-}
 }
