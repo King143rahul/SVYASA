@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 
-// Cache the client to reuse connections (Critical for serverless performance)
+// Cache the client to reuse connections
 let cachedClient = null;
 let cachedDb = null;
 
@@ -9,7 +9,6 @@ const connectToDatabase = async () => {
     return { client: cachedClient, db: cachedDb };
   }
 
-  // NOTE: Ensure 'MONGODB_URI' is set in your Netlify "Environment variables" settings
   if (!process.env.MONGODB_URI) {
     throw new Error('MONGODB_URI environment variable is MISSING in Netlify settings.');
   }
@@ -32,7 +31,6 @@ const corsHeaders = {
 };
 
 export async function handler(event, context) {
-  // 1. Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' };
   }
@@ -41,89 +39,84 @@ export async function handler(event, context) {
     const { db } = await connectToDatabase();
     const postsCollection = db.collection('posts');
     const commentsCollection = db.collection('comments');
+    const notesCollection = db.collection('notes');
 
     const { httpMethod, path, body } = event;
 
-    // 2. Parse the path to get resource (posts/comments) and ID
-    // Path comes in as "/.netlify/functions/api/posts" or "/api/posts"
     const segments = path
       .split('/')
       .filter(s => s && s !== '.netlify' && s !== 'functions' && s !== 'api');
 
-    const resource = segments[0]; // 'posts' or 'comments'
-    const id = segments[1];       // '123' or undefined
-
-    console.log(`Request: ${httpMethod} /${resource}/${id || ''}`);
+    const resource = segments[0]; // 'posts', 'comments', 'notes'
+    const id = segments[1];       
 
     let result;
 
     // --- API ROUTING LOGIC ---
 
-    // GET /posts
-    if (httpMethod === 'GET' && resource === 'posts') {
-      result = await postsCollection.find({}).sort({ timestamp: -1 }).toArray();
-    }
-    // POST /posts
-    else if (httpMethod === 'POST' && resource === 'posts') {
-      const post = JSON.parse(body);
-      if (post.timestamp) post.timestamp = new Date(post.timestamp);
-      else post.timestamp = new Date();
-      
-      // Ensure reactions object exists
-      post.reactions = post.reactions || {};
-      
-      result = await postsCollection.insertOne(post);
-    }
-    // PATCH /posts/:id (Reactions)
-    else if (httpMethod === 'PATCH' && resource === 'posts' && id) {
-      const updateData = JSON.parse(body);
-      
-      if (updateData.reaction) {
-        // Atomic increment for specific reaction emoji
-        const field = `reactions.${updateData.reaction}`;
-        await postsCollection.updateOne({ id }, { $inc: { [field]: 1 } });
-        result = { success: true };
-      } else {
+    // POSTS
+    if (resource === 'posts') {
+      if (httpMethod === 'GET') {
+        result = await postsCollection.find({}).sort({ timestamp: -1 }).toArray();
+      } else if (httpMethod === 'POST') {
+        const post = JSON.parse(body);
+        post.timestamp = post.timestamp ? new Date(post.timestamp) : new Date();
+        post.reactions = post.reactions || {};
+        result = await postsCollection.insertOne(post);
+      } else if (httpMethod === 'PUT' && id) {
+        // Full update (Edit Post)
+        const updateData = JSON.parse(body);
+        delete updateData._id; // prevent mongo error
         await postsCollection.updateOne({ id }, { $set: updateData });
         result = { success: true };
+      } else if (httpMethod === 'PATCH' && id) {
+        // Reactions
+        const updateData = JSON.parse(body);
+        if (updateData.reaction) {
+          const field = `reactions.${updateData.reaction}`;
+          await postsCollection.updateOne({ id }, { $inc: { [field]: 1 } });
+        } else {
+          await postsCollection.updateOne({ id }, { $set: updateData });
+        }
+        result = { success: true };
+      } else if (httpMethod === 'DELETE' && id) {
+        await postsCollection.deleteOne({ id });
+        await commentsCollection.deleteMany({ postId: id });
+        result = { success: true };
+      }
+    } 
+    // COMMENTS
+    else if (resource === 'comments') {
+      if (httpMethod === 'GET') {
+        const comments = await commentsCollection.find({}).toArray();
+        const commentsByPostId = {};
+        comments.forEach(c => {
+          if (!commentsByPostId[c.postId]) commentsByPostId[c.postId] = [];
+          commentsByPostId[c.postId].push(c);
+        });
+        Object.keys(commentsByPostId).forEach(pid => {
+          commentsByPostId[pid].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        });
+        result = commentsByPostId;
+      } else if (httpMethod === 'POST' && id) {
+        const comment = JSON.parse(body);
+        comment.timestamp = comment.timestamp ? new Date(comment.timestamp) : new Date();
+        const commentData = { ...comment, postId: id };
+        result = await commentsCollection.insertOne(commentData);
+        await postsCollection.updateOne({ id }, { $inc: { commentCount: 1 } });
       }
     }
-    // DELETE /posts/:id
-    else if (httpMethod === 'DELETE' && resource === 'posts' && id) {
-      await postsCollection.deleteOne({ id });
-      await commentsCollection.deleteMany({ postId: id });
-      result = { success: true };
+    // NOTES
+    else if (resource === 'notes') {
+      if (httpMethod === 'GET') {
+        result = await notesCollection.find({}).toArray();
+      } else if (httpMethod === 'POST') {
+        const note = JSON.parse(body);
+        result = await notesCollection.insertOne(note);
+      } else if (httpMethod === 'DELETE' && id) {
+        result = await notesCollection.deleteOne({ id });
+      }
     }
-    // GET /comments
-    else if (httpMethod === 'GET' && resource === 'comments') {
-      const comments = await commentsCollection.find({}).toArray();
-      const commentsByPostId = {};
-      comments.forEach(c => {
-        if (!commentsByPostId[c.postId]) commentsByPostId[c.postId] = [];
-        commentsByPostId[c.postId].push(c);
-      });
-      // Sort comments by timestamp
-      Object.keys(commentsByPostId).forEach(pid => {
-        commentsByPostId[pid].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      });
-      result = commentsByPostId;
-    }
-    // POST /comments/:postId
-    else if (httpMethod === 'POST' && resource === 'comments' && id) {
-      const comment = JSON.parse(body);
-      if (comment.timestamp) comment.timestamp = new Date(comment.timestamp);
-      else comment.timestamp = new Date();
-
-      const commentData = { ...comment, postId: id };
-      result = await commentsCollection.insertOne(commentData);
-
-      // Increment comment count on the post
-      await postsCollection.updateOne(
-        { id },
-        { $inc: { commentCount: 1 } }
-      );
-    }
-    // 404 Not Found
     else {
       return {
         statusCode: 404,
