@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: king143rahul/svyasa/SVYASA-76983a21efddfc86d9d8c84451e3f27affabbaca/src/components/PostCard.tsx
+fullContent:
 import { MessageCircle, Clock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,11 +19,14 @@ interface PostCardProps {
   timestamp: Date;
   expiresIn: string;
   commentCount: number;
+  reactions?: Record<string, number>;
   onClick: () => void;
   onHashtagClick: (hashtag: string) => void;
+  onReact?: (id: string, emoji: string) => void;
 }
 
 const PostCard = ({
+  id,
   nickname,
   avatar,
   content,
@@ -29,8 +36,10 @@ const PostCard = ({
   timestamp,
   expiresIn,
   commentCount,
+  reactions = {},
   onClick,
   onHashtagClick,
+  onReact,
 }: PostCardProps) => {
   const formatContent = (text: string) => {
     const parts = text.split(/(#\w+)/g);
@@ -52,6 +61,8 @@ const PostCard = ({
       return part;
     });
   };
+
+  const reactionEmojis = ["❤️", "😂", "🔥", "😮", "😢"];
 
   return (
     <Card
@@ -106,14 +117,31 @@ const PostCard = ({
             </div>
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2 text-muted-foreground hover:text-primary"
-          >
-            <MessageCircle className="h-4 w-4" />
-            <span>{commentCount} comments</span>
-          </Button>
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+              {reactionEmojis.map((emoji) => (
+                <Button
+                  key={emoji}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs hover:bg-secondary/50"
+                  onClick={() => onReact && onReact(id, emoji)}
+                >
+                  <span className="mr-1">{emoji}</span>
+                  <span>{reactions[emoji] || 0}</span>
+                </Button>
+              ))}
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-muted-foreground hover:text-primary"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>{commentCount} comments</span>
+            </Button>
+          </div>
         </div>
       </div>
     </Card>
@@ -121,3 +149,4 @@ const PostCard = ({
 };
 
 export default PostCard;
+}
