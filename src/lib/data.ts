@@ -29,6 +29,8 @@ const generateAvatar = (seed: string) => {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
 };
 
+// In production (Netlify), this is empty string so it uses the same domain.
+// In local dev, it points to your local server.js
 const API_BASE = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001';
 
 const apiCall = async (endpoint: string, options?: RequestInit) => {
@@ -51,6 +53,8 @@ const apiCall = async (endpoint: string, options?: RequestInit) => {
 export const getPosts = async (): Promise<Post[]> => {
   try {
     const posts = await apiCall('/posts');
+    if (!Array.isArray(posts)) return [];
+    
     return posts.map((post: any) => ({
       ...post,
       timestamp: new Date(post.timestamp),
@@ -65,8 +69,6 @@ export const getPosts = async (): Promise<Post[]> => {
 export const getComments = async (): Promise<Record<string, Comment[]>> => {
   try {
     const commentsMap = await apiCall('/comments');
-    
-    // Fix: Ensure we handle the object correctly
     if (!commentsMap || typeof commentsMap !== 'object') return {};
 
     Object.keys(commentsMap).forEach((postId) => {
@@ -123,7 +125,6 @@ export const reactToPost = async (postId: string, emoji: string) => {
   }
 };
 
-// Notes functions
 interface Note {
   id?: string;
   text: string;
@@ -132,7 +133,7 @@ interface Note {
 
 export const getNotes = async (): Promise<Note[]> => {
   try {
-    const notes = await apiCall('/notes').catch(() => []); 
+    const notes = await apiCall('/notes').catch(() => []);
     return Array.isArray(notes) ? notes.map((note: any) => ({
       ...note,
       timestamp: new Date(note.timestamp),
