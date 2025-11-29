@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: king143rahul/svyasa/SVYASA-76983a21efddfc86d9d8c84451e3f27affabbaca/src/components/PostCard.tsx
-fullContent:
 import { MessageCircle, Clock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
