@@ -10,7 +10,8 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB setup
-const client = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+const connectionString = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const client = new MongoClient(connectionString);
 const db = client.db('sv-secrets');
 const postsCollection = db.collection('posts');
 const commentsCollection = db.collection('comments');
@@ -28,6 +29,7 @@ const mockPosts = [
     timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
     expiresIn: "22h left",
     commentCount: 2,
+    reactions: { "❤️": 5, "🔥": 2 },
     ip: "192.168.1.100",
     deviceInfo: "Chrome on Windows 11",
   },
@@ -42,6 +44,7 @@ const mockPosts = [
     timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
     expiresIn: "19h left",
     commentCount: 1,
+    reactions: { "😮": 1 },
     ip: "192.168.1.101",
     deviceInfo: "Firefox on macOS",
   },
@@ -92,7 +95,9 @@ async function initializeDatabase() {
   }
 }
 
-// API routes
+// --- API ROUTES ---
+
+// Get all posts
 app.get('/api/posts', async (req, res) => {
   try {
     const posts = await postsCollection.find({}).sort({ timestamp: -1 }).toArray();
@@ -102,6 +107,7 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
+// Create a post
 app.post('/api/posts', async (req, res) => {
   try {
     const result = await postsCollection.insertOne(req.body);
@@ -111,6 +117,28 @@ app.post('/api/posts', async (req, res) => {
   }
 });
 
+// Update post (Reactions) - NEW FEATURE
+app.patch('/api/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    if (updateData.reaction) {
+      // Atomic increment for specific reaction
+      const field = `reactions.${updateData.reaction}`;
+      await postsCollection.updateOne({ id }, { $inc: { [field]: 1 } });
+      res.json({ success: true });
+    } else {
+      await postsCollection.updateOne({ id }, { $set: updateData });
+      res.json({ success: true });
+    }
+  } catch (error) {
+    console.error('Error updating post:', error);
+    res.status(500).json({ error: 'Error updating post' });
+  }
+});
+
+// Delete a post
 app.delete('/api/posts/:id', async (req, res) => {
   try {
     const result = await postsCollection.deleteOne({ id: req.params.id });
@@ -121,6 +149,7 @@ app.delete('/api/posts/:id', async (req, res) => {
   }
 });
 
+// Get comments
 app.get('/api/comments', async (req, res) => {
   try {
     const comments = await commentsCollection.find({}).toArray();
@@ -143,6 +172,7 @@ app.get('/api/comments', async (req, res) => {
   }
 });
 
+// Add comment
 app.post('/api/comments/:postId', async (req, res) => {
   try {
     const comment = { ...req.body, postId: req.params.postId };
@@ -158,6 +188,11 @@ app.post('/api/comments/:postId', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Error adding comment' });
   }
+});
+
+// Notes routes (optional)
+app.get('/api/notes', async (req, res) => {
+    res.json([]); 
 });
 
 // Connect to MongoDB and start server
