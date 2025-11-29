@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: king143rahul/svyasa/SVYASA-76983a21efddfc86d9d8c84451e3f27affabbaca/netlify/functions/api.js
-fullContent:
 import { MongoClient } from 'mongodb';
 
 // Cache the client outside the handler to reuse connections
