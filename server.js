@@ -117,14 +117,29 @@ app.post('/api/posts', async (req, res) => {
   }
 });
 
-// Update post (Reactions) - NEW FEATURE
+// Update post details (Admin Edit)
+app.put('/api/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    // Remove _id to avoid modification error
+    delete updateData._id;
+    
+    await postsCollection.updateOne({ id }, { $set: updateData });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating post:', error);
+    res.status(500).json({ error: 'Error updating post' });
+  }
+});
+
+// Update post reactions (PATCH)
 app.patch('/api/posts/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
     
     if (updateData.reaction) {
-      // Atomic increment for specific reaction
       const field = `reactions.${updateData.reaction}`;
       await postsCollection.updateOne({ id }, { $inc: { [field]: 1 } });
       res.json({ success: true });
@@ -161,7 +176,6 @@ app.get('/api/comments', async (req, res) => {
       commentsByPostId[comment.postId].push(comment);
     });
 
-    // Sort comments by timestamp desc for each post
     Object.keys(commentsByPostId).forEach(postId => {
       commentsByPostId[postId].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     });
@@ -178,7 +192,6 @@ app.post('/api/comments/:postId', async (req, res) => {
     const comment = { ...req.body, postId: req.params.postId };
     const result = await commentsCollection.insertOne(comment);
 
-    // Update comment count in post
     await postsCollection.updateOne(
       { id: req.params.postId },
       { $inc: { commentCount: 1 } }
@@ -190,9 +203,32 @@ app.post('/api/comments/:postId', async (req, res) => {
   }
 });
 
-// Notes routes (optional)
+// Notes routes
 app.get('/api/notes', async (req, res) => {
-    res.json([]); 
+    try {
+      const notes = await db.collection('notes').find({}).toArray();
+      res.json(notes);
+    } catch (e) {
+      res.json([]);
+    }
+});
+
+app.post('/api/notes', async (req, res) => {
+    try {
+      const result = await db.collection('notes').insertOne(req.body);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({error: 'Error adding note'});
+    }
+});
+
+app.delete('/api/notes/:id', async (req, res) => {
+    try {
+      const result = await db.collection('notes').deleteOne({ id: req.params.id });
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({error: 'Error deleting note'});
+    }
 });
 
 // Connect to MongoDB and start server
