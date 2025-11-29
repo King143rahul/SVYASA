@@ -1,3 +1,7 @@
+{
+type: uploaded file
+fileName: king143rahul/svyasa/SVYASA-76983a21efddfc86d9d8c84451e3f27affabbaca/src/pages/Index.tsx
+fullContent:
 import { useState, useEffect } from "react";
 import { Plus, Filter } from "lucide-react";
 import Header from "@/components/Header";
@@ -8,7 +12,8 @@ import TrendingSidebar from "@/components/TrendingSidebar";
 import TrendingModal from "@/components/TrendingModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getPosts, getComments, addPost as addPosToData, addComment as addCommToData, getNotes } from "@/lib/data";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getPosts, getComments, addPost as addPosToData, addComment as addCommToData, getNotes, reactToPost } from "@/lib/data";
 
 interface Post {
   id: string;
@@ -23,6 +28,7 @@ interface Post {
   commentCount: number;
   ip?: string;
   deviceInfo?: string;
+  reactions?: Record<string, number>;
 }
 
 interface Comment {
@@ -45,6 +51,8 @@ const trendingHashtags = [
   { tag: "#innerworld", count: 98 },
 ];
 
+const EXPIRATION_HOURS = 48;
+
 const Index = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<Record<string, Comment[]>>({});
@@ -53,16 +61,48 @@ const Index = () => {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [adminNotes, setAdminNotes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const processPosts = (rawPosts: Post[]) => {
+    const now = Date.now();
+    const expirationMs = EXPIRATION_HOURS * 60 * 60 * 1000;
+
+    return rawPosts
+      .filter((post) => {
+        const age = now - post.timestamp.getTime();
+        return age < expirationMs;
+      })
+      .map((post) => {
+        const timeLeft = expirationMs - (now - post.timestamp.getTime());
+        const hoursLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60)));
+        const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
+        
+        let expiresInString = "";
+        if (hoursLeft > 0) expiresInString = `${hoursLeft}h left`;
+        else expiresInString = `${minutesLeft}m left`;
+
+        return { ...post, expiresIn: expiresInString };
+      });
+  };
+
+  const loadData = async () => {
+    try {
+      const [fetchedPosts, fetchedComments, fetchedNotes] = await Promise.all([
+        getPosts(),
+        getComments(),
+        getNotes()
+      ]);
+      setPosts(processPosts(fetchedPosts));
+      setComments(fetchedComments);
+      setAdminNotes(fetchedNotes);
+    } catch (error) {
+      console.error("Failed to load data", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      const fetchedPosts = await getPosts();
-      setPosts(fetchedPosts);
-      const fetchedComments = await getComments();
-      setComments(fetchedComments);
-      const fetchedNotes = await getNotes();
-      setAdminNotes(fetchedNotes);
-    };
     loadData();
   }, []);
 
@@ -76,14 +116,15 @@ const Index = () => {
       department: data.department,
       year: data.year,
       timestamp: new Date(),
-      expiresIn: "48h left",
+      expiresIn: `${EXPIRATION_HOURS}h left`,
       commentCount: 0,
-      ip: "192.168.1.0", // Simulated for new posts
+      ip: "192.168.1.0",
       deviceInfo: "Unknown Device",
+      reactions: {}
     };
     await addPosToData(newPost);
     const updatedPosts = await getPosts();
-    setPosts(updatedPosts);
+    setPosts(processPosts(updatedPosts));
   };
 
   const handleAddComment = async (content: string) => {
@@ -98,10 +139,40 @@ const Index = () => {
     };
 
     await addCommToData(selectedPost.id, newComment);
-    const updatedPosts = await getPosts();
-    setPosts(updatedPosts);
+    
+    // Refresh data to show new comment and update counts
     const updatedComments = await getComments();
     setComments(updatedComments);
+    const updatedPosts = await getPosts();
+    const processedPosts = processPosts(updatedPosts);
+    setPosts(processedPosts);
+    
+    // Update the selected post view as well to reflect new comment count
+    const updatedSelectedPost = processedPosts.find(p => p.id === selectedPost.id);
+    if (updatedSelectedPost) {
+      setSelectedPost(updatedSelectedPost);
+    }
+  };
+
+  const handleReact = async (id: string, emoji: string) => {
+    // Optimistic update
+    setPosts(currentPosts => 
+      currentPosts.map(post => {
+        if (post.id === id) {
+          const currentCount = post.reactions?.[emoji] || 0;
+          return {
+            ...post,
+            reactions: {
+              ...post.reactions,
+              [emoji]: currentCount + 1
+            }
+          };
+        }
+        return post;
+      })
+    );
+
+    await reactToPost(id, emoji);
   };
 
   const filteredPosts = selectedHashtag
@@ -163,7 +234,7 @@ const Index = () => {
                   {selectedHashtag ? `Posts tagged ${selectedHashtag}` : "Latest Confessions"}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  {filteredPosts.length} anonymous secrets shared
+                  {isLoading ? "Loading..." : `${filteredPosts.length} anonymous secrets shared`}
                 </p>
               </div>
               <Button
@@ -187,23 +258,41 @@ const Index = () => {
             )}
 
             <div className="space-y-4">
-              {filteredPosts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  {...post}
-                  onClick={() => setSelectedPost(post)}
-                  onHashtagClick={setSelectedHashtag}
-                />
-              ))}
+              {isLoading ? (
+                // Loading Skeleton
+                [1, 2, 3].map((i) => (
+                  <div key={i} className="glass-card p-6">
+                    <div className="flex gap-4">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="flex-1 space-y-3">
+                        <div className="flex justify-between">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-4 w-16" />
+                        </div>
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-3/4" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : filteredPosts.length > 0 ? (
+                filteredPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    {...post}
+                    onClick={() => setSelectedPost(post)}
+                    onHashtagClick={setSelectedHashtag}
+                    onReact={handleReact}
+                  />
+                ))
+              ) : (
+                <div className="glass-card p-12 text-center">
+                  <p className="text-muted-foreground">
+                    No posts found. Be the first to share!
+                  </p>
+                </div>
+              )}
             </div>
-
-            {filteredPosts.length === 0 && (
-              <div className="glass-card p-12 text-center">
-                <p className="text-muted-foreground">
-                  No posts found with this hashtag. Be the first to share!
-                </p>
-              </div>
-            )}
           </div>
 
           <div className="hidden lg:block">
@@ -255,3 +344,4 @@ const Index = () => {
 };
 
 export default Index;
+}
