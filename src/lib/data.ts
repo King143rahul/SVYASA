@@ -9,7 +9,7 @@ interface Comment {
 
 type CommentInput = Omit<Comment, 'postId'>;
 
-interface Post {
+export interface Post {
   id: string;
   nickname: string;
   avatar: string;
@@ -29,8 +29,6 @@ const generateAvatar = (seed: string) => {
   return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
 };
 
-// In production (Netlify), this is empty string so it uses the same domain.
-// In local dev, it points to your local server.js
 const API_BASE = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001';
 
 const apiCall = async (endpoint: string, options?: RequestInit) => {
@@ -89,6 +87,17 @@ export const deletePost = async (id: string) => {
     await apiCall(`/posts/${id}`, { method: 'DELETE' });
   } catch (error) {
     console.error('Error deleting post:', error);
+  }
+};
+
+export const updatePost = async (id: string, updates: Partial<Post>) => {
+  try {
+    await apiCall(`/posts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  } catch (error) {
+    console.error('Error updating post:', error);
   }
 };
 
