@@ -1,10 +1,14 @@
+{
+type: uploaded file
+fileName: king143rahul/svyasa/SVYASA-76983a21efddfc86d9d8c84451e3f27affabbaca/src/lib/data.ts
+fullContent:
 interface Comment {
   id: string;
   nickname: string;
   avatar: string;
   content: string;
   timestamp: Date;
-  postId: string; // Added for MongoDB collection
+  postId: string;
 }
 
 type CommentInput = Omit<Comment, 'postId'>;
@@ -20,8 +24,9 @@ interface Post {
   timestamp: Date;
   expiresIn: string;
   commentCount: number;
-  ip?: string; // Added IP field
-  deviceInfo?: string; // Added device info
+  ip?: string;
+  deviceInfo?: string;
+  reactions?: Record<string, number>; // Added for emoji feature
 }
 
 const generateAvatar = (seed: string) => {
@@ -32,19 +37,20 @@ const API_BASE = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:
 
 const apiCall = async (endpoint: string, options?: RequestInit) => {
   const url = `${API_BASE}/api${endpoint}`;
-  console.log('API call to:', url, options?.method || 'GET');
-  const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  console.log('Response status:', response.status);
-  if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`);
+  try {
+    const response = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    if (!response.ok) {
+      throw new Error(`API call failed: ${response.statusText}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error(`API call error for ${url}:`, error);
+    throw error;
   }
-  return response.json();
 };
-
-
 
 export const getPosts = async (): Promise<Post[]> => {
   try {
@@ -52,6 +58,7 @@ export const getPosts = async (): Promise<Post[]> => {
     return posts.map((post: any) => ({
       ...post,
       timestamp: new Date(post.timestamp),
+      reactions: post.reactions || {},
     })).sort((a: Post, b: Post) => b.timestamp.getTime() - a.timestamp.getTime());
   } catch (error) {
     console.error('Error fetching posts:', error);
@@ -61,20 +68,13 @@ export const getPosts = async (): Promise<Post[]> => {
 
 export const getComments = async (): Promise<Record<string, Comment[]>> => {
   try {
-    const comments = await apiCall('/comments');
-    const commentsMap: Record<string, Comment[]> = {};
-    comments.forEach((comment: any) => {
-      if (!commentsMap[comment.postId]) {
-        commentsMap[comment.postId] = [];
-      }
-      commentsMap[comment.postId].push({
+    const commentsMap = await apiCall('/comments');
+    // Fix: Iterate over object keys instead of using forEach on the object itself
+    Object.keys(commentsMap).forEach((postId) => {
+      commentsMap[postId] = commentsMap[postId].map((comment: any) => ({
         ...comment,
         timestamp: new Date(comment.timestamp),
-      });
-    });
-    // Sort comments by timestamp desc
-    Object.keys(commentsMap).forEach(postId => {
-      commentsMap[postId].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      })).sort((a: Comment, b: Comment) => b.timestamp.getTime() - a.timestamp.getTime());
     });
     return commentsMap;
   } catch (error) {
@@ -110,6 +110,17 @@ export const addComment = async (postId: string, comment: Omit<Comment, 'postId'
     });
   } catch (error) {
     console.error('Error adding comment:', error);
+  }
+};
+
+export const reactToPost = async (postId: string, emoji: string) => {
+  try {
+    await apiCall(`/posts/${postId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reaction: emoji }),
+    });
+  } catch (error) {
+    console.error('Error reacting to post:', error);
   }
 };
 
@@ -152,3 +163,4 @@ export const deleteNote = async (id: string) => {
     console.error('Error deleting note:', error);
   }
 };
+}
