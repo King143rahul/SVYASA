@@ -59,6 +59,7 @@ const Index = () => {
   const [adminNotes, setAdminNotes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Filter out posts older than 48 hours and calculate remaining time
   const processPosts = (rawPosts: Post[]) => {
     const now = Date.now();
     const expirationMs = EXPIRATION_HOURS * 60 * 60 * 1000;
@@ -83,6 +84,7 @@ const Index = () => {
 
   const loadData = async () => {
     try {
+      // Fetch all data in parallel
       const [fetchedPosts, fetchedComments, fetchedNotes] = await Promise.all([
         getPosts(),
         getComments(),
@@ -118,7 +120,9 @@ const Index = () => {
       deviceInfo: "Unknown Device",
       reactions: {}
     };
+    // Add to DB
     await addPosToData(newPost);
+    // Refresh list
     const updatedPosts = await getPosts();
     setPosts(processPosts(updatedPosts));
   };
@@ -136,14 +140,14 @@ const Index = () => {
 
     await addCommToData(selectedPost.id, newComment);
     
-    // Refresh data to show new comment and update counts
+    // Refresh all data to keep counts in sync
     const updatedComments = await getComments();
     setComments(updatedComments);
     const updatedPosts = await getPosts();
     const processedPosts = processPosts(updatedPosts);
     setPosts(processedPosts);
     
-    // Update the selected post view as well to reflect new comment count
+    // Update the currently viewed post object
     const updatedSelectedPost = processedPosts.find(p => p.id === selectedPost.id);
     if (updatedSelectedPost) {
       setSelectedPost(updatedSelectedPost);
@@ -151,7 +155,7 @@ const Index = () => {
   };
 
   const handleReact = async (id: string, emoji: string) => {
-    // Optimistic update
+    // 1. Optimistic UI Update (Instant feedback)
     setPosts(currentPosts => 
       currentPosts.map(post => {
         if (post.id === id) {
@@ -168,6 +172,7 @@ const Index = () => {
       })
     );
 
+    // 2. Send to Backend
     await reactToPost(id, emoji);
   };
 
@@ -255,7 +260,7 @@ const Index = () => {
 
             <div className="space-y-4">
               {isLoading ? (
-                // Loading Skeleton
+                // Loading Skeleton (Displays while data is fetching)
                 [1, 2, 3].map((i) => (
                   <div key={i} className="glass-card p-6">
                     <div className="flex gap-4">
