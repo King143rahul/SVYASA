@@ -1,7 +1,3 @@
-{
-type: uploaded file
-fileName: king143rahul/svyasa/SVYASA-76983a21efddfc86d9d8c84451e3f27affabbaca/src/pages/Index.tsx
-fullContent:
 import { useState, useEffect } from "react";
 import { Plus, Filter } from "lucide-react";
 import Header from "@/components/Header";
